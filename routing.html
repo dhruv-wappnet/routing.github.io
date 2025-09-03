@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maritime Route Visualizer & GeoJSON Viewer</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+        }
+        
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+        
+        .sidebar {
+            width: 350px;
+            background: white;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+            padding: 20px;
+            overflow-y: auto;
+        }
+        
+        .map-container {
+            flex: 1;
+            position: relative;
+        }
+        
+        #map {
+            height: 100%;
+            width: 100%;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        input, select, button {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        
+        input[type="file"] {
+            padding: 5px;
+            background-color: #f8f9fa;
+        }
+        
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+        
+        button:hover {
+            background-color: #0056b3;
+        }
+        
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .preset-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin: 15px 0;
+        }
+        
+        .preset-btn {
+            background-color: #28a745;
+            font-size: 12px;
+            padding: 8px 4px;
+        }
+        
+        .preset-btn:hover {
+            background-color: #1e7e34;
+        }
+        
+        .route-info {
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+        
+        .route-info h3 {
+            margin-top: 0;
+            color: #495057;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+        
+        .error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            border-radius: 4px;
+            color: #721c24;
+            padding: 10px;
+            margin-top: 10px;
+        }
+        
+        .coordinates-input {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 5px;
+        }
+        
+        .coord-label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 2px;
+        }
+        
+        .geojson-info {
+            background-color: #e7f3ff;
+            border: 1px solid #b3d9ff;
+            border-radius: 4px;
+            padding: 10px;
+            margin-top: 10px;
+            font-size: 12px;
+        }
+        
+        .success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            border-radius: 4px;
+            color: #155724;
+            padding: 10px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <h2>Maritime Route Calculator & GeoJSON Viewer</h2>
+            
+            <div class="form-group">
+                <label>Origin Coordinates</label>
+                <div class="coordinates-input">
+                    <div>
+                        <div class="coord-label">Longitude</div>
+                        <input type="number" id="originLng" placeholder="-74.0059" step="any">
+                    </div>
+                    <div>
+                        <div class="coord-label">Latitude</div>
+                        <input type="number" id="originLat" placeholder="40.7128" step="any">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label>Destination Coordinates</label>
+                <div class="coordinates-input">
+                    <div>
+                        <div class="coord-label">Longitude</div>
+                        <input type="number" id="destLng" placeholder="0.1077" step="any">
+                    </div>
+                    <div>
+                        <div class="coord-label">Latitude</div>
+                        <input type="number" id="destLat" placeholder="49.4944" step="any">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label for="units">Distance Units</label>
+                <select id="units">
+                    <option value="km">Kilometers</option>
+                    <option value="nm">Nautical Miles</option>
+                </select>
+            </div>
+            
+            <div class="preset-buttons">
+                <button class="preset-btn" onclick="setPreset('ny-havre')">NY → Le Havre</button>
+                <button class="preset-btn" onclick="setPreset('singapore-rotterdam')">Singapore → Rotterdam</button>
+                <button class="preset-btn" onclick="setPreset('la-tokyo')">LA → Tokyo</button>
+                <button class="preset-btn" onclick="setPreset('suez-panama')">Suez → Panama</button>
+            </div>
+            
+            <div class="form-group">
+                <label for="geojsonFile">Upload GeoJSON File</label>
+                <input type="file" id="geojsonFile" accept=".geojson,.json" onchange="handleGeoJSONUpload(event)">
+                <div style="font-size: 12px; color: #666; margin-top: 5px;">
+                    Supports: Points, Lines, Polygons, FeatureCollections
+                </div>
+            </div>
+            
+            <button id="calculateBtn" onclick="calculateRoute()">Calculate Route</button>
+            <button onclick="clearMap()">Clear Map</button>
+            <button onclick="clearGeoJSON()">Clear GeoJSON</button>
+
+            <div class="form-group" style="margin-top:15px;">
+                <label style="font-weight:normal;">
+                    <input type="checkbox" id="showWaypoints" onchange="toggleWaypoints()"> Show Waypoints
+                </label>
+                <div style="font-size:11px;color:#666;margin-top:4px;">Displays small markers for each vertex in line features and route. Click a marker to see coordinates.</div>
+            </div>
+            
+            <div id="routeInfo" class="route-info" style="display: none;"></div>
+            <div id="errorInfo" class="error" style="display: none;"></div>
+        </div>
+        
+        <div class="map-container">
+            <div id="map"></div>
+        </div>
+    </div>
+    
+    <!-- Leaflet JavaScript -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script>
+        // Initialize the map
+        const map = L.map('map').setView([30, 0], 2);
+        
+        // Base map (OpenStreetMap)
+        const osmBase = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        // OpenSeaMap seamarks overlay (transparent layer with marine navigation symbols)
+        const seamarkLayer = L.tileLayer('https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png', {
+            attribution: 'Seamarks © OpenSeaMap contributors (CC-BY-SA)',
+            transparent: true
+        }).addTo(map); // enabled by default; remove this line if you prefer off by default
+        
+        // Variables to store current route and markers
+        let currentRoute = null;
+        let originMarker = null;
+        let destinationMarker = null;
+        let geojsonLayer = null;
+    let waypointLayer = L.layerGroup().addTo(map);
+    // Layer control (added after waypoint layer creation so it can be toggled)
+    const layerControl = L.control.layers(
+        { 'OpenStreetMap': osmBase },
+        { 'Seamarks (OpenSeaMap)': seamarkLayer, 'Waypoints': waypointLayer },
+        { collapsed: true }
+    ).addTo(map);
+    let geojsonDataCache = null; // store last loaded geojson raw data
+    let routeCoordinatesCache = null; // store last calculated route coords [ [lon,lat], ...]
+        
+        // Preset routes
+        const presets = {
+            'ny-havre': {
+                origin: [-74.0059, 40.7128],
+                dest: [0.1077, 49.4944],
+                name: 'New York to Le Havre'
+            },
+            'singapore-rotterdam': {
+                origin: [103.8198, 1.3521],
+                dest: [4.4777, 51.9244],
+                name: 'Singapore to Rotterdam'
+            },
+            'la-tokyo': {
+                origin: [-118.2437, 34.0522],
+                dest: [139.6917, 35.6895],
+                name: 'Los Angeles to Tokyo'
+            },
+            'suez-panama': {
+                origin: [32.5498, 29.9668],
+                dest: [-79.5188, 9.0765],
+                name: 'Suez Canal to Panama Canal'
+            }
+        };
+        
+        function setPreset(presetKey) {
+            const preset = presets[presetKey];
+            if (preset) {
+                document.getElementById('originLng').value = preset.origin[0];
+                document.getElementById('originLat').value = preset.origin[1];
+                document.getElementById('destLng').value = preset.dest[0];
+                document.getElementById('destLat').value = preset.dest[1];
+            }
+        }
+        
+        function clearMap() {
+            if (currentRoute) {
+                map.removeLayer(currentRoute);
+                currentRoute = null;
+            }
+            if (originMarker) {
+                map.removeLayer(originMarker);
+                originMarker = null;
+            }
+            if (destinationMarker) {
+                map.removeLayer(destinationMarker);
+                destinationMarker = null;
+            }
+            // Clear any waypoint markers related to the route
+            clearWaypointMarkers();
+            routeCoordinatesCache = null;
+            document.getElementById('routeInfo').style.display = 'none';
+            document.getElementById('errorInfo').style.display = 'none';
+        }
+        
+        function clearGeoJSON() {
+            if (geojsonLayer) {
+                map.removeLayer(geojsonLayer);
+                geojsonLayer = null;
+            }
+            clearWaypointMarkers();
+            geojsonDataCache = null;
+            document.getElementById('geojsonFile').value = '';
+            const geojsonInfo = document.querySelector('.geojson-info');
+            if (geojsonInfo) {
+                geojsonInfo.remove();
+            }
+            const successInfo = document.querySelector('.success');
+            if (successInfo) {
+                successInfo.remove();
+            }
+        }
+        
+        function handleGeoJSONUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const geojsonData = JSON.parse(e.target.result);
+                    displayGeoJSON(geojsonData, file.name);
+                } catch (error) {
+                    showError('Error parsing GeoJSON file: ' + error.message);
+                }
+            };
+            reader.readAsText(file);
+        }
+        
+        function displayGeoJSON(geojsonData, fileName) {
+            // Clear previous GeoJSON layer
+            if (geojsonLayer) {
+                map.removeLayer(geojsonLayer);
+            }
+            clearWaypointMarkers();
+            geojsonDataCache = geojsonData; // cache data for waypoint toggle
+            
+            // Style function for GeoJSON features
+            function getFeatureStyle(feature) {
+                const geometryType = feature.geometry.type;
+                
+                switch (geometryType) {
+                    case 'Point':
+                    case 'MultiPoint':
+                        return {
+                            radius: 6,
+                            fillColor: '#ff7800',
+                            color: '#000',
+                            weight: 1,
+                            opacity: 1,
+                            fillOpacity: 0.8
+                        };
+                    case 'LineString':
+                    case 'MultiLineString':
+                        return {
+                            color: '#ff7800',
+                            weight: 3,
+                            opacity: 0.8
+                        };
+                    case 'Polygon':
+                    case 'MultiPolygon':
+                        return {
+                            fillColor: '#ff7800',
+                            weight: 2,
+                            opacity: 1,
+                            color: '#ff7800',
+                            fillOpacity: 0.3
+                        };
+                    default:
+                        return {
+                            color: '#ff7800',
+                            weight: 2,
+                            opacity: 0.8
+                        };
+                }
+            }
+            
+            // Create GeoJSON layer
+            geojsonLayer = L.geoJSON(geojsonData, {
+                style: getFeatureStyle,
+                pointToLayer: function (feature, latlng) {
+                    return L.circleMarker(latlng, getFeatureStyle(feature));
+                },
+                onEachFeature: function (feature, layer) {
+                    // Create popup content
+                    let popupContent = '<div><strong>Feature Properties:</strong><br>';
+                    
+                    if (feature.properties && Object.keys(feature.properties).length > 0) {
+                        for (const [key, value] of Object.entries(feature.properties)) {
+                            popupContent += `<strong>${key}:</strong> ${value}<br>`;
+                        }
+                    } else {
+                        popupContent += 'No properties available<br>';
+                    }
+                    
+                    popupContent += `<strong>Geometry:</strong> ${feature.geometry.type}</div>`;
+                    layer.bindPopup(popupContent);
+                }
+            }).addTo(map);
+            
+            // Fit map to GeoJSON bounds
+            try {
+                map.fitBounds(geojsonLayer.getBounds(), { padding: [20, 20] });
+            } catch (error) {
+                console.warn('Could not fit bounds to GeoJSON layer:', error);
+            }
+            
+            // Display GeoJSON information
+            const featureCount = geojsonData.features ? geojsonData.features.length : 1;
+            const geometryTypes = new Set();
+            
+            if (geojsonData.features) {
+                geojsonData.features.forEach(feature => {
+                    geometryTypes.add(feature.geometry.type);
+                });
+            } else if (geojsonData.geometry) {
+                geometryTypes.add(geojsonData.geometry.type);
+            }
+            
+            // Remove any existing info displays
+            const existingInfo = document.querySelector('.geojson-info');
+            if (existingInfo) {
+                existingInfo.remove();
+            }
+            
+            const existingSuccess = document.querySelector('.success');
+            if (existingSuccess) {
+                existingSuccess.remove();
+            }
+            
+            // Create and display success message
+            const successDiv = document.createElement('div');
+            successDiv.className = 'success';
+            successDiv.innerHTML = `
+                <strong>GeoJSON loaded successfully!</strong><br>
+                File: ${fileName}<br>
+                Features: ${featureCount}<br>
+                Geometry Types: ${Array.from(geometryTypes).join(', ')}
+            `;
+            
+            document.querySelector('.sidebar').appendChild(successDiv);
+            
+            // Clear any error messages
+            document.getElementById('errorInfo').style.display = 'none';
+
+            // If waypoint display is enabled, add markers now
+            if (document.getElementById('showWaypoints').checked) {
+                createGeoJSONWaypointMarkers();
+            }
+        }
+        
+        // Call the Python backend for real maritime routing
+        async function calculateSeaRoute(origin, destination, units) {
+            // This is the old local backend call, kept for fallback
+            try {
+                const response = await fetch('/api/calculate-route', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        origin: origin,
+                        destination: destination,
+                        units: units
+                    })
+                });
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const result = await response.json();
+                return result;
+            } catch (error) {
+                console.error('Error calling backend:', error);
+                return await simulateSeaRoute(origin, destination);
+            }
+        }
+
+        // External API call for routing (when only coordinates are picked)
+        async function calculateExternalRoute(origin, destination) {
+            try {
+                const response = await fetch('http://127.0.0.1:8000/route', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-api-key': '12345'
+                    },
+                    body: JSON.stringify({
+                        origin: origin,
+                        destination: destination,
+                        routing_engine: 'python'
+                    })
+                });
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const result = await response.json();
+                return result;
+            } catch (error) {
+                console.error('Error calling external routing API:', error);
+                return null;
+            }
+        }
+        
+        // Simulate the searoute calculation (fallback when backend is not available)
+        function simulateSeaRoute(origin, destination) {
+            return new Promise((resolve) => {
+                setTimeout(() => {
+                    // Create a simple great circle route for demonstration
+                    const coords = [];
+                    const steps = 50;
+                    
+                    for (let i = 0; i <= steps; i++) {
+                        const t = i / steps;
+                        const lat = origin[1] + (destination[1] - origin[1]) * t;
+                        const lng = origin[0] + (destination[0] - origin[0]) * t;
+                        coords.push([lng, lat]);
+                    }
+                    
+                    // Calculate approximate distance
+                    const distance = calculateDistance(origin[1], origin[0], destination[1], destination[0]);
+                    
+                    resolve({
+                        success: true,
+                        coordinates: coords,
+                        distance: distance,
+                        origin: origin,
+                        destination: destination
+                    });
+                }, 1000); // Simulate API delay
+            });
+        }
+        
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371; // Earth's radius in km
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                     Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                     Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+        
+        async function calculateRoute() {
+            const originLng = parseFloat(document.getElementById('originLng').value);
+            const originLat = parseFloat(document.getElementById('originLat').value);
+            const destLng = parseFloat(document.getElementById('destLng').value);
+            const destLat = parseFloat(document.getElementById('destLat').value);
+            const units = document.getElementById('units').value;
+
+            // Validate inputs
+            if (isNaN(originLng) || isNaN(originLat) || isNaN(destLng) || isNaN(destLat)) {
+                showError('Please enter valid coordinates for both origin and destination.');
+                return;
+            }
+            if (Math.abs(originLat) > 90 || Math.abs(destLat) > 90) {
+                showError('Latitude values must be between -90 and 90 degrees.');
+                return;
+            }
+            if (Math.abs(originLng) > 180 || Math.abs(destLng) > 180) {
+                showError('Longitude values must be between -180 and 180 degrees.');
+                return;
+            }
+
+            // Clear previous results
+            clearMap();
+
+            // Show loading state
+            const btn = document.getElementById('calculateBtn');
+            btn.disabled = true;
+            btn.textContent = 'Calculating...';
+
+            try {
+                // If no GeoJSON is loaded, use external API
+                if (!geojsonDataCache) {
+                    const apiResult = await calculateExternalRoute([originLng, originLat], [destLng, destLat]);
+                    if (apiResult && apiResult.route && apiResult.route.features && apiResult.route.features.length > 0) {
+                        displayExternalRoute(apiResult);
+                    } else {
+                        showError('Failed to calculate route: ' + (apiResult && apiResult.error ? apiResult.error : 'No route returned'));
+                    }
+                } else {
+                    // Fallback to local backend or simulation
+                    const result = await calculateSeaRoute([originLng, originLat], [destLng, destLat], units);
+                    if (result.success) {
+                        displayRoute(result, units);
+                    } else {
+                        showError('Failed to calculate route: ' + (result.error || 'Unknown error'));
+                    }
+                }
+            } catch (error) {
+                showError('Error calculating route: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Calculate Route';
+            }
+        }
+
+        // Display route from external API response
+        function displayExternalRoute(apiResult) {
+            // Extract coordinates from GeoJSON LineString
+            const feature = apiResult.route.features[0];
+            const coords = feature.geometry.coordinates;
+            routeCoordinatesCache = coords;
+            // Convert to Leaflet format [lat, lng]
+            const leafletCoords = coords.map(coord => [coord[1], coord[0]]);
+            currentRoute = L.polyline(leafletCoords, {
+                color: '#007bff',
+                weight: 3,
+                opacity: 0.8
+            }).addTo(map);
+            // Add origin marker
+            const origin = apiResult.metadata.origin;
+            originMarker = L.marker([origin[1], origin[0]], { title: 'Origin' }).addTo(map)
+                .bindPopup(`<b>Origin</b><br>Lat: ${origin[1].toFixed(4)}<br>Lng: ${origin[0].toFixed(4)}`);
+            // Add destination marker
+            const destination = apiResult.metadata.destination;
+            destinationMarker = L.marker([destination[1], destination[0]], { title: 'Destination' }).addTo(map)
+                .bindPopup(`<b>Destination</b><br>Lat: ${destination[1].toFixed(4)}<br>Lng: ${destination[0].toFixed(4)}`);
+            // Fit map to route bounds
+            const bounds = L.latLngBounds(leafletCoords);
+            map.fitBounds(bounds, { padding: [20, 20] });
+            // Show waypoints if enabled
+            if (document.getElementById('showWaypoints').checked) {
+                createRouteWaypointMarkers();
+            }
+            // Display route info
+            document.getElementById('routeInfo').innerHTML = `
+                <h3>Route Information</h3>
+                <p><strong>Distance:</strong> ${apiResult.distanceInKilometers.toFixed(2)} km (${apiResult.distanceInNauticalMiles.toFixed(2)} nm)</p>
+                <p><strong>Estimated Travel Time:</strong> ${apiResult.estimatedTravelTimeHours.toFixed(2)} hours</p>
+                <p><strong>Waypoints:</strong> ${feature.properties.waypointCount || coords.length}</p>
+                <p><strong>Origin:</strong> ${origin[1].toFixed(4)}°, ${origin[0].toFixed(4)}°</p>
+                <p><strong>Destination:</strong> ${destination[1].toFixed(4)}°, ${destination[0].toFixed(4)}°</p>
+                <p><em>Provider: ${apiResult.metadata.provider || feature.properties.provider || 'unknown'}</em></p>
+            `;
+            document.getElementById('routeInfo').style.display = 'block';
+            document.getElementById('errorInfo').style.display = 'none';
+        }
+        
+        function displayRoute(result, units) {
+            const coordinates = result.coordinates;
+            
+            // Convert coordinates to Leaflet format [lat, lng]
+            const leafletCoords = coordinates.map(coord => [coord[1], coord[0]]);
+            
+            // Create and add the route polyline
+            currentRoute = L.polyline(leafletCoords, {
+                color: '#007bff',
+                weight: 3,
+                opacity: 0.8
+            }).addTo(map);
+
+            routeCoordinatesCache = coordinates; // cache for waypoint markers
+            if (document.getElementById('showWaypoints').checked) {
+                createRouteWaypointMarkers();
+            }
+            
+            // Add origin marker
+            originMarker = L.marker([result.origin[1], result.origin[0]], {
+                title: 'Origin'
+            }).addTo(map)
+            .bindPopup(`<b>Origin</b><br>Lat: ${result.origin[1].toFixed(4)}<br>Lng: ${result.origin[0].toFixed(4)}`);
+            
+            // Add destination marker
+            destinationMarker = L.marker([result.destination[1], result.destination[0]], {
+                title: 'Destination'
+            }).addTo(map)
+            .bindPopup(`<b>Destination</b><br>Lat: ${result.destination[1].toFixed(4)}<br>Lng: ${result.destination[0].toFixed(4)}`);
+            
+            // Fit map to route bounds
+            const bounds = L.latLngBounds(leafletCoords);
+            map.fitBounds(bounds, { padding: [20, 20] });
+            
+            // Display route information
+            const distance = units === 'nm' ? result.distance * 0.539957 : result.distance;
+            const unitLabel = units === 'nm' ? 'nautical miles' : 'kilometers';
+            
+            document.getElementById('routeInfo').innerHTML = `
+                <h3>Route Information</h3>
+                <p><strong>Distance:</strong> ${distance.toFixed(2)} ${unitLabel}</p>
+                <p><strong>Waypoints:</strong> ${coordinates.length}</p>
+                <p><strong>Origin:</strong> ${result.origin[1].toFixed(4)}°, ${result.origin[0].toFixed(4)}°</p>
+                <p><strong>Destination:</strong> ${result.destination[1].toFixed(4)}°, ${result.destination[0].toFixed(4)}°</p>
+                <p><em>Note: This is a simulated route for demonstration. In a real application, this would use the searoute library for accurate maritime routing.</em></p>
+            `;
+            document.getElementById('routeInfo').style.display = 'block';
+            document.getElementById('errorInfo').style.display = 'none';
+        }
+        
+        function showError(message) {
+            document.getElementById('errorInfo').innerHTML = message;
+            document.getElementById('errorInfo').style.display = 'block';
+            document.getElementById('routeInfo').style.display = 'none';
+        }
+        
+        // Allow clicking on map to set coordinates
+        map.on('click', function(e) {
+            const lat = e.latlng.lat.toFixed(4);
+            const lng = e.latlng.lng.toFixed(4);
+            
+            // Check which coordinate field to fill (prioritize empty fields)
+            const originLng = document.getElementById('originLng');
+            const originLat = document.getElementById('originLat');
+            const destLng = document.getElementById('destLng');
+            const destLat = document.getElementById('destLat');
+            
+            if (!originLng.value || !originLat.value) {
+                originLng.value = lng;
+                originLat.value = lat;
+            } else if (!destLng.value || !destLat.value) {
+                destLng.value = lng;
+                destLat.value = lat;
+            } else {
+                // If all fields are filled, replace origin
+                originLng.value = lng;
+                originLat.value = lat;
+            }
+        });
+
+        // ================= Waypoint Marker Logic =================
+        function clearWaypointMarkers() {
+            waypointLayer.clearLayers();
+        }
+
+        function toggleWaypoints() {
+            const checked = document.getElementById('showWaypoints').checked;
+            clearWaypointMarkers();
+            if (checked) {
+                if (geojsonDataCache) {
+                    createGeoJSONWaypointMarkers();
+                }
+                if (routeCoordinatesCache) {
+                    createRouteWaypointMarkers();
+                }
+            }
+        }
+
+        function createGeoJSONWaypointMarkers() {
+            if (!geojsonDataCache) return;
+            const features = geojsonDataCache.type === 'FeatureCollection' ? geojsonDataCache.features : [geojsonDataCache];
+            let waypointIndex = 0;
+            const maxWaypoints = 100000000; // soft cap
+            for (const feat of features) {
+                if (!feat.geometry) continue;
+                const type = feat.geometry.type;
+                let coords = feat.geometry.coordinates;
+                if (type === 'LineString') {
+                    addVertexMarkers(coords, feat.properties, () => waypointIndex++, maxWaypoints);
+                } else if (type === 'MultiLineString') {
+                    for (const line of coords) {
+                        addVertexMarkers(line, feat.properties, () => waypointIndex++, maxWaypoints);
+                    }
+                } else if (type === 'Polygon') {
+                    // outer ring only for waypoint markers
+                    if (coords[0]) addVertexMarkers(coords[0], feat.properties, () => waypointIndex++, maxWaypoints);
+                } else if (type === 'MultiPolygon') {
+                    for (const poly of coords) {
+                        if (poly[0]) addVertexMarkers(poly[0], feat.properties, () => waypointIndex++, maxWaypoints);
+                    }
+                } else if (type === 'Point') {
+                    addSinglePointMarker(coords, feat.properties, waypointIndex++);
+                } else if (type === 'MultiPoint') {
+                    for (const pt of coords) addSinglePointMarker(pt, feat.properties, waypointIndex++);
+                }
+                if (waypointIndex > maxWaypoints) {
+                    console.warn('Waypoint cap reached; skipping remaining to avoid performance issues.');
+                    break;
+                }
+            }
+        }
+
+        function createRouteWaypointMarkers() {
+            if (!routeCoordinatesCache) return;
+            addVertexMarkers(routeCoordinatesCache, { source: 'route' }, (() => { let i=0; return () => i++; })(), 3000);
+        }
+
+        function addVertexMarkers(coordArray, properties, indexFnOrValue, maxWaypoints) {
+            if (!Array.isArray(coordArray)) return;
+            let generator; let isFn = false;
+            if (typeof indexFnOrValue === 'function') { generator = indexFnOrValue; isFn = true; } else { let base = indexFnOrValue || 0; generator = () => base++; }
+            for (let i=0;i<coordArray.length;i++) {
+                const c = coordArray[i];
+                if (!Array.isArray(c) || c.length < 2) continue;
+                const idx = generator();
+                addSinglePointMarker(c, properties, idx);
+                if (idx > maxWaypoints) break;
+            }
+        }
+
+        function addSinglePointMarker(coord, properties, idx) {
+            const lng = coord[0];
+            const lat = coord[1];
+            const marker = L.circleMarker([lat, lng], {
+                radius: 4,
+                color: '#0066ff',
+                weight: 1,
+                fillColor: '#ffffff',
+                fillOpacity: 0.9
+            });
+            let propHtml = '';
+            if (properties && Object.keys(properties).length) {
+                propHtml = Object.entries(properties).slice(0,5).map(([k,v]) => `<strong>${k}</strong>: ${v}`).join('<br>');
+                if (Object.keys(properties).length > 5) propHtml += '<br><em>…</em>';
+            }
+            const popup = `<div style="font-size:12px;">
+                <strong>Waypoint #${idx}</strong><br>
+                Lat: ${lat.toFixed(6)}<br>Lng: ${lng.toFixed(6)}<br>
+                ${propHtml ? '<hr style="margin:4px 0;">'+propHtml : ''}
+                <button style="margin-top:4px;font-size:11px;" onclick="copyToClipboard('${lat.toFixed(6)}, ${lng.toFixed(6)}'); event.stopPropagation();">Copy</button>
+            </div>`;
+            marker.bindPopup(popup);
+            waypointLayer.addLayer(marker);
+        }
+
+        function copyToClipboard(text) {
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(text).catch(err => console.warn('Clipboard copy failed', err));
+            } else {
+                const temp = document.createElement('textarea');
+                temp.value = text; document.body.appendChild(temp); temp.select();
+                try { document.execCommand('copy'); } catch(e) {}
+                document.body.removeChild(temp);
+            }
+        }
+    </script>
+</body>
+</html>
